@@ -1,0 +1,113 @@
+# AgriChallenge Evaluation Bot
+
+This project provides a Discord bot designed to receive a link to a pre-trained deep learning model implemented in **Pytorch (.pth)**, automatically download it, evaluate it on a private test set, then generate the predictions csv file corresponding to the inference output by the model.
+Originally developed for the datathon **AgriChallenge 2025**, the bot ensures the integrity of the competition by protecting the private test set from manual inspection or annotation, thereby helping to prevent any form of unfair advantage among participants.
+
+---
+
+## Folder Structure
+
+```
+AgriChallenge-evaluation-bot/
+│
+├── main.py                   # Discord bot entrypoint
+├── utils.py                  # Utility functions (job manager, Docker runner, etc.)
+├── run_inference_job.py      # Script executed inside Docker for inference
+├── models/                   # Folder of subfolders containing user-uploaded models (.pth/.pt) labeled with the ids of the corresponding user job
+├── inference/                # Folder of subfolders containing user-uploaded inference scripts (.py) labeled with the ids of the corresponding user job
+├── testset/                  # Private test images (not to be shared)
+├── Dockerfile                # Dockerfile for inference environment
+├── requirements.txt          # Python dependencies for the bot, will be installed automatically when building the Docker image
+├── .env                      # Environment variables (token, etc.)
+└── README.md                 # Project documentation
+```
+
+---
+
+## Getting Started
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/yourusername/AgriChallenge-evaluation-bot.git
+cd AgriChallenge-evaluation-bot
+```
+
+### 2. Prepare the Private Test Set
+
+- Place your **private test images** in the `testset/` directory.
+- **Important:** The name of the test set directory (`testset`) is referenced in `utils.py` as `TEST_DIR`.  
+  If you want to use a different directory name, **modify the `TEST_DIR` variable in `utils.py` accordingly**.
+
+### 3. Build the Docker Image
+
+The bot uses Docker to run user models in an isolated environment.  
+**Build the Docker image using the provided Dockerfile:**
+
+```bash
+docker build -t inference-sandbox .
+```
+
+- If you want to use a different image name, **replace `inference-sandbox` with your preferred name**.
+- **Update the image name in `utils.py`** in the following command:
+
+```python
+cmd = [
+    "docker", "run", "--rm",
+    "--gpus", "all",
+    "--shm-size=8g",
+    "--user", f"{os.getuid()}:{os.getgid()}",
+    "--network", "none",
+    "--cpus=10", "--memory=16g",
+    "-v", f"{temp_dir}:/workspace:rw",
+    "-v", f"{os.path.abspath(TEST_DIR)}:/workspace/testset:ro",
+    "inference-sandbox",  # <-- Change this if you use a different image name
+    "python", "-u", "/workspace/run_inference_job.py"
+]
+```
+
+### 4. Configure Environment Variables
+
+- Create a `.env` file in the root directory.
+- Add your Discord bot token and any other required secrets.
+
+```
+DISCORD_TOKEN=your_discord_token_here
+```
+
+### 5. Run the Bot
+
+```bash
+python main.py
+```
+
+---
+
+## Usage
+
+- The bot will listen for commands in Discord.
+- Users should first run the `/start` command to receive the guidelines from the bot.
+- Users should provide a **public Google Drive link** to their PyTorch model and upload their inference script.
+- The bot will run the model in a Docker container on the private test set and return the results.
+
+---
+
+## Notes
+
+- **Each user’s job runs in a separate Docker container.**  
+  No containers are shared between users.
+- **Maximum parallel jobs:** The number of containers is limited by `max_containers` in `utils.py` (default: 48).
+- **Test set privacy:**  
+  Do **not** share the contents of the `testset/` directory.  
+  This is critical for fair competition.
+
+---
+
+## Contributing
+
+Feel free to open issues or submit pull requests for improvements!
+
+---
+
+## License
+MIT License
